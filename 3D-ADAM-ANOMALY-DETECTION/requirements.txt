@@ -1,8 +1,0 @@
-torch
-ultralytics
-opencv-python-headless
-numpy
-torchvision
-openexr
-datasets
-huggingface-hub
