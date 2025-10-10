@@ -1,8 +1,8 @@
 import os
 from datasets import load_dataset
 from tqdm import tqdm
-import sys
-import time
+from PIL import Image
+import io
 
 # --- Configuration ---
 DATASET_NAME = "pmchard/3D-ADAM"
@@ -14,69 +14,86 @@ SAMPLES_PER_CLASS = {
     "hole": 60,
     "scratch": 60,
 }
-TOTAL_SAMPLES = sum(SAMPLES_PER_CLASS.values())
-SEED = 42 # for reproducibility
 
-# Local target directory
-DATA_DIRECTORY = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
-RAW_DIRECTORY = os.path.join(DATA_DIRECTORY, 'raw')
-os.makedirs(RAW_DIRECTORY, exist_ok=True)
-# --- End Configuration ---
+# Base directories
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+RAW_DIR = os.path.join(BASE_DIR, "raw")
+os.makedirs(RAW_DIR, exist_ok=True)
 
-def download_and_save_class(class_label, num_samples, base_dir):
+# Initialize counters for each class
+saved_count = {cls: 0 for cls in SAMPLES_PER_CLASS}
+
+
+def get_class_from_path(path: str):
     """
-    Downloads, filters, and saves samples for a single class to avoid large downloads.
+    Extracts the class name from an image path.
     """
-    print(f"\n--- Processing class: '{class_label}' ---")
-    print(f"Attempting to download {num_samples} samples.")
+    parts = path.replace("\\", "/").split("/")
+    for c in SAMPLES_PER_CLASS.keys():
+        if c in parts:
+            return c
+    return None
 
+
+def save_image(rgb_data, save_path):
+    """Save RGB image from Hugging Face sample."""
     try:
-        # Load the full dataset metadata in streaming mode to avoid downloading everything
-        dataset = load_dataset(DATASET_NAME, split='train', streaming=True)
-
-        # Filter for the specific class by converting integer label to string
-        class_subset = dataset.filter(lambda x: dataset.features['label'].int2str(x['label']) == class_label)
-
-        # Take the required number of samples
-        class_subset_sample = class_subset.take(num_samples)
-
-        # Create a directory for the class if it doesn't exist
-        class_dir = os.path.join(base_dir, class_label)
-        os.makedirs(class_dir, exist_ok=True)
-
-        saved_count = 0
-        for sample in tqdm(class_subset_sample, desc=f"Saving '{class_label}' images"):
-            rgb_image = sample['rgb']
-            
-            # The dataset doesn't provide original filenames, so we create them.
-            # We can use a hash of the image data to create a unique name.
-            img_hash = hash(rgb_image.tobytes())
-            img_filename = f"{img_hash}.png"
-            img_path = os.path.join(class_dir, img_filename)
-            
-            if not os.path.exists(img_path):
-                rgb_image.save(img_path)
-            
-            saved_count += 1
-        
-        print(f"Successfully saved {saved_count} samples for class '{class_label}'.")
-        return saved_count
-
+        if isinstance(rgb_data, Image.Image):
+            img = rgb_data
+        elif isinstance(rgb_data, (bytes, bytearray)):
+            img = Image.open(io.BytesIO(rgb_data))
+        elif hasattr(rgb_data, "numpy"):
+            from PIL import Image
+            img = Image.fromarray(rgb_data.numpy())
+        else:
+            return False
+        img.save(save_path)
+        return True
     except Exception as e:
-        print(f"  [ERROR] Failed to process class '{class_label}': {e}")
-        return 0
+        print(f"[WARN] Could not save image: {e}")
+        return False
 
-if __name__ == '__main__':
-    print(f"--- 3D-ADAM Stratified Subset Creation ---")
-    total_saved = 0
-    
-    # Process each class individually to manage API requests
-    for class_label, num_samples in SAMPLES_PER_CLASS.items():
-        count = download_and_save_class(class_label, num_samples, RAW_DIRECTORY)
-        total_saved += count
-        # Optional: Add a small delay between processing classes if rate limiting persists
-        time.sleep(5)
 
-    print("\n--- Data processing complete! ---")
-    print(f"Total images saved: {total_saved}")
-    print(f"Data is located in: {RAW_DIRECTORY}")
+if __name__ == "__main__":
+    print(f"--- Loading dataset: {DATASET_NAME} ---")
+    dataset = load_dataset(DATASET_NAME, split="train", streaming=True)
+    print("✅ Dataset loaded.")
+
+    # Pre-create folders for each class
+    for cls in SAMPLES_PER_CLASS:
+        os.makedirs(os.path.join(RAW_DIR, cls), exist_ok=True)
+
+    print("--- Streaming dataset and saving samples ---")
+    for sample in tqdm(dataset, desc="Streaming dataset"):
+        # Stop early if all class quotas reached
+        if all(saved_count[cls] >= SAMPLES_PER_CLASS[cls] for cls in SAMPLES_PER_CLASS):
+            break
+
+        # Try to get path
+        path_fields = [k for k in sample.keys() if "path" in k or "file" in k]
+        file_path = None
+        if path_fields:
+            file_path = sample[path_fields[0]]
+        elif "rgb" in sample and hasattr(sample["rgb"], "filename"):
+            file_path = sample["rgb"].filename
+        else:
+            file_path = str(sample)
+
+        # Infer class
+        cls = get_class_from_path(str(file_path))
+        if not cls:
+            continue
+
+        # Check quota
+        if saved_count[cls] >= SAMPLES_PER_CLASS[cls]:
+            continue
+
+        # Save image
+        save_path = os.path.join(RAW_DIR, cls, f"{saved_count[cls]}.png")
+        if save_image(sample["rgb"], save_path):
+            saved_count[cls] += 1
+
+    print("\nFinished saving samples!")
+    for cls in SAMPLES_PER_CLASS:
+        print(f"{cls}: {saved_count[cls]} images saved")
+    print(f"Saved in: {RAW_DIR}")
