@@ -1,8 +1,27 @@
-torch
-ultralytics
-opencv-python-headless
-numpy
-torchvision
-openexr
-datasets
-huggingface-hub
+# Core deep learning libraries
+torch>=2.2.0
+torchvision>=0.17.0
+torchaudio>=2.2.0
+
+# Data and dataset handling
+datasets>=3.0.0
+tqdm>=4.66.0
+numpy>=1.26.0
+pandas>=2.2.0
+
+# Image processing
+Pillow>=10.0.0
+scikit-image>=0.23.0
+opencv-python>=4.9.0.80
+
+# Configuration and utilities
+pyyaml>=6.0.1
+joblib>=1.4.0
+
+# Optional but useful for experimentation / debugging
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Environment and reproducibility
+scipy>=1.12.0
+typing-extensions>=4.10.0
