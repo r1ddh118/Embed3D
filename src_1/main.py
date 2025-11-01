@@ -6,24 +6,25 @@ from dataset_class import CustomDataset
 from trainer import Trainer
 from model_unet import UNet
 import torch
+from eval import evaluate
 
 def main():
     CACHE_FILE = "adam_5pct_subset.pkl"
 
     # Check if cached subset exists
     if os.path.exists(CACHE_FILE):
-        print(f"Loading cached 5% subset from {CACHE_FILE}")
+        print(f"Loading cached 10% subset from {CACHE_FILE}")
         with open(CACHE_FILE, "rb") as f:
             small_dataset = pickle.load(f)
     else:
         print("Loading dataset: pmchard/3D-ADAM in streaming mode (no full download)...")
         dataset = load_dataset("pmchard/3D-ADAM", split="train", streaming=True)
         total_samples = 14120
-        sample_size = int(total_samples * 0.05)
-        print(f"Taking only 5% subset → {sample_size} samples out of {total_samples}")
+        sample_size = int(total_samples * 0.10)
+        print(f"Taking only 10% subset → {sample_size} samples out of {total_samples}")
 
         small_dataset = list(dataset.take(sample_size))
-        print("Successfully extracted 5% subset.")
+        print("Successfully extracted 10% subset.")
         
         # Cache for next time
         with open(CACHE_FILE, "wb") as f:
@@ -58,7 +59,11 @@ def main():
     # Pass checkpoint_dir to Trainer
     trainer = Trainer(model, optimizer, criterion, device, checkpoint_dir)
 
-    trainer.fit(train_loader, val_loader, epochs=10)
+    trainer.fit(train_loader, val_loader, epochs=3)
+     # === Evaluation ===
+    print("\nStarting evaluation on validation set...")
+    evalu = evaluate(model, val_loader, device)
+    print("Evaluation complete.")
 
 if __name__ == "__main__":
     main()
