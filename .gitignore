@@ -1,0 +1,3 @@
+__pycache__/
+checkpoints/
+adam_5pct_subset.pkl
