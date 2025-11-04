@@ -1,54 +1,75 @@
-from PIL import Image
+# dataset_class.py
 import torch
+from torch.utils.data import Dataset
 from torchvision import transforms
+from PIL import Image
 import numpy as np
 from io import BytesIO
 
-class CustomDataset(torch.utils.data.Dataset):
-    def __init__(self, hf_dataset, img_size=256, num_classes=13):
-        self.dataset = hf_dataset
+class CustomDataset(Dataset):
+    """
+    hf_dataset: list-like of dataset items from HuggingFace streaming (each item contains 'image' and 'mask')
+    augment: boolean, apply train augmentations
+    Returns: image Tensor [C,H,W], mask Tensor [1,H,W] with values {0,1} float32
+    """
+    def __init__(self, hf_dataset, img_size=256, augment=False):
+        self.items = hf_dataset
         self.img_size = img_size
-        self.num_classes = num_classes
+        self.augment = augment
 
-        # Resize & normalize images
-        self.transform = transforms.Compose([
+        # train augmentations
+        self.train_transform = transforms.Compose([
             transforms.Resize((img_size, img_size)),
-            transforms.ToTensor()
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.2),
+            transforms.RandomRotation(20),
+            transforms.ColorJitter(0.15, 0.15, 0.15, 0.05),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485,0.456,0.406), std=(0.229,0.224,0.225))
         ])
 
-        # Use nearest-neighbor resize for masks (no interpolation blur)
-        self.mask_transform = transforms.Resize((img_size, img_size), interpolation=Image.NEAREST)
+        # val/test transforms
+        self.val_transform = transforms.Compose([
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485,0.456,0.406), std=(0.229,0.224,0.225))
+        ])
+
+        self.mask_transform = transforms.Compose([
+            transforms.Resize((img_size, img_size), interpolation=Image.NEAREST)
+        ])
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.items)
+
+    def _open(self, field):
+        if isinstance(field, dict) and "bytes" in field:
+            return Image.open(BytesIO(field["bytes"]))
+        elif isinstance(field, Image.Image):
+            return field
+        else:
+            return Image.open(field)
 
     def __getitem__(self, idx):
-        item = self.dataset[idx]
+        item = self.items[idx]
+        img_field = item["image"]
+        mask_field = item.get("mask", None)
 
-        # ✅ Load image
-        image = item["image"]
-        if isinstance(image, dict) and "bytes" in image:
-            image = Image.open(BytesIO(image["bytes"]))
-        elif not isinstance(image, Image.Image):
-            image = Image.open(image)
-        image = image.convert("RGB")
-        image = self.transform(image)
-
-        # Load mask
-        mask = item.get("mask")
-        if mask is not None:
-            if isinstance(mask, dict) and "bytes" in mask:
-                mask = Image.open(BytesIO(mask["bytes"]))
-            elif not isinstance(mask, Image.Image):
-                mask = Image.open(mask)
-
-            mask = mask.convert("L")  # grayscale mask
-            mask = self.mask_transform(mask)
-
-            # Convert to integer class tensor
-            mask = torch.from_numpy(np.array(mask, dtype=np.int64))
+        img = self._open(img_field).convert("RGB")
+        if mask_field is not None:
+            mask_img = self._open(mask_field).convert("L")
         else:
-            # Fallback: empty mask
-            mask = torch.zeros((self.img_size, self.img_size), dtype=torch.int64)
+            mask_img = Image.fromarray(np.zeros((self.img_size, self.img_size), dtype=np.uint8))
 
-        return image, mask
+        if self.augment:
+            image_tensor = self.train_transform(img)
+        else:
+            image_tensor = self.val_transform(img)
+
+        mask_pil = self.mask_transform(mask_img)
+        mask_np = np.array(mask_pil, dtype=np.uint8)
+        # ensure binary (0 or 1)
+        mask_np = (mask_np > 0).astype(np.float32)
+        mask_tensor = torch.from_numpy(mask_np).unsqueeze(0)  # [1,H,W] float32
+
+        return image_tensor, mask_tensor
