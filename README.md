@@ -45,18 +45,20 @@ pip install -r requirements.txt
 ## Project Structure
 
 ```
-Embed3D/src_1
-├── main.py                 # Main training and orchestration script
-├── model_unet.py           # U-Net architecture
-├── dataset_class.py        # Custom dataset loader for 3D-ADAM
-├── data_module.py          # Data preparation utilities
-├── trainer.py              # Training loop with logging and early stopping
-├── eval.py                 # Evaluation metrics (IoU, Dice)
-├── visualisations.py       # Visualization of training and predictions
-├── predictions.py          # Fault prediction on single images
-├── utils.py                # Helper utilities
-├── checkpoints/            # Saved model weights
-├── results/                # Evaluation outputs and visualizations
+Embed3D/
+├──src_1
+  ├── main.py                 # Main training and orchestration script
+  ├── model_unet.py           # U-Net architecture
+  ├── dataset_class.py        # Custom dataset loader for 3D-ADAM
+  ├── data_module.py          # Data preparation utilities
+  ├── trainer.py              # Training loop with logging and early stopping
+  ├── eval.py                 # Evaluation metrics (IoU, Dice)
+  ├── visualisations.py       # Visualization of training and predictions
+  ├── predictions.py          # Fault prediction on single images
+  ├── utils.py                # Helper utilities
+  ├── checkpoints/            # Saved model weights
+  └── results/                # Evaluation outputs and visualizations
+├── .gitignore
 └── requirements.txt
 ```
 
@@ -72,7 +74,7 @@ python src_1/main.py
 
 Steps performed:
 
-1. Load cached 5 % subset of the 3D-ADAM dataset (`adam_5pct_subset.pkl`)
+1. Load cached 10 % subset of the 3D-ADAM dataset (`adam_5pct_subset.pkl`)
 2. Split into train / validation / test sets
 3. Train model with early stopping
 4. Save best model weights and full model pickle
