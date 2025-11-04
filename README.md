@@ -9,7 +9,7 @@ It leverages the **[pmchard/3D-ADAM](https://huggingface.co/datasets/pmchard/3D-
 
 The pipeline integrates:
 
-* **Data extraction** (5 % subset from Hugging Face)
+* **Data extraction** (10 % subset from Hugging Face)
 * **Custom dataset loader**
 * **U-Net-based binary segmentation**
 * **Training with early stopping and learning-rate scheduling**
