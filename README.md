@@ -45,7 +45,7 @@ pip install -r requirements.txt
 ## Project Structure
 
 ```
-Embed3D/
+Embed3D/src_1
 ├── main.py                 # Main training and orchestration script
 ├── model_unet.py           # U-Net architecture
 ├── dataset_class.py        # Custom dataset loader for 3D-ADAM
